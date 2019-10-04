@@ -11,7 +11,7 @@ struct bg_pro{
     char command[1024];
     struct bg_pro* next;
 };
-struct bg_pro* head = NULL;
+struct bg_pro* head;
 
 char* create_prompt(char prompt[]){
     char cwd[256];
@@ -35,24 +35,85 @@ char* create_prompt(char prompt[]){
     return prompt;
 }
 
-void bg_list_append(pid_t p, char **args){
-    struct bg_pro *current = head;
-    while(current->next != NULL){
-        current = current->next;
+
+
+int  bg_process_count(){
+    int count = 0;
+    struct bg_pro current = *head;
+    while(current.next != NULL){
+        count++;
+        current = *current.next;
     }
-    current->pid = p;
-    strcpy(current->command, *args);
-    current->next = NULL;
+    return count;
 }
 
+void bg_list_append(pid_t p, char *args[100]){
+    struct bg_pro *new_pro = malloc(sizeof(struct bg_pro)); //unfreed
+    char new_args[1000];
+    strcpy(new_args, args[0]);
+
+    int i = 1;
+    while(args[i] != NULL){
+        strcat(new_args, " ");
+        strcat(new_args, args[i]);
+        i++;
+    }
+
+    new_pro->pid = p;
+    strcpy(new_pro->command, new_args);
+    new_pro->next = NULL;
+
+    if(head == NULL){
+        head = new_pro;
+    }
+    else{
+        struct bg_pro *current = head;
+        while(current->next != NULL){
+            current = current->next;
+        }
+        current->next = new_pro;
+    }
+}
+
+void kill_bg_zombies(){
+    if(bg_process_count > 0){
+        pid_t ter = waitpid(0, NULL, WNOHANG);
+        while(ter > 0){
+            if(head->pid == ter){
+                printf("%d %s has terminated.\n", head->pid, head->command);
+                head = head->next;
+            }
+            else{
+                struct bg_pro current = *head;
+                while(current.next->pid != ter){
+                    current = *current.next;
+                }
+                printf("%d %s  has terminated.\n", current.next->pid, current.next->command);
+                current.next = current.next->next;
+            }
+            ter = waitpid(0,NULL,WNOHANG);
+        }
+    }
+}
 
 void print_bglist() {
-    struct bg_pro* current = head;
-    while(current != NULL){
-        printf("%d: ", current->pid);
-        printf("%s ", current->command);
-        current = current -> next;
+    int count = 0;
+    struct bg_pro *current = head;
+    kill_bg_zombies();
+    if(head == NULL){
+        printf("Total Background jobs: %d\n", count);
+        return;
     }
+    count++;
+    while(current->next != NULL){
+        count++;
+        printf("%d: ", current->pid);
+        printf("%s\n", current->command);
+        current = current->next;
+    }
+    printf("%d: ", current->pid);
+    printf("%s\n", current->command);
+    printf("Total Background jobs: %d\n", count);
 }
 
 
@@ -84,13 +145,9 @@ void execute_program(char* cmd, char *args[10]){
         while(wait(&status) == 0)
             ;
     }
-
 }
 
-void execute_bg_program(char* cmd, char *args[9]){
-    printf("%s\n", cmd);
-    printf("In execute_bg_program\n");
-
+void execute_bg_program(char* cmd, char *args[100]){
     pid_t p;
     int status;
 
@@ -101,66 +158,35 @@ void execute_bg_program(char* cmd, char *args[9]){
     else if (p == 0){
         if((execvp(cmd, args) < 0)){
             printf("ERROR: Execvp failed.\n\n");
+            kill(p, SIGTERM);
+            return;
         }
-        head->pid = p;
-        strcpy(head->command, *args);
-        head->next = NULL;
     }
     else{
+        printf("args: %s\n", args[1]);
         bg_list_append(p, args);
-        while(wait(&status) == 0)
-            ;
     }
-
 }
 
 
-void process_bg(char *args[10]) {
-    printf("Process bg...\n");
-    char *new_args[10];
-    printf("before for loop");
-    for(int i = 1; i < 10; i++){
-        new_args[i-1] = args[i];
+void process_bg(char *args[100]) {
+    if(args[1]==NULL){
+        printf("Command required after 'bg'.\n");
+        return;
     }
-    new_args[9] = NULL;
-    execute_bg_program(new_args[0], new_args);
+
+    printf("args: %s\n", *args);
+    execute_bg_program(args[1], &args[1]);
 }
-
-/*
-void execute_bg_program(char* cmd, char *args[10]){
-    pid_t pid;
-    int status;
-
-    if((pid = fork()) < 0){
-        printf("ERROR: Forked failed.\n\n");
-        exit(1);
-    }
-    else if (pid == 0){
-        if((execvp(cmd, args) < 0)){
-            printf("ERROR: Execvp failed.\n\n");
-        }
-    }
-    else{
-        if((execvp(cmd, args) == 0)){
-
-        }
-        else{
-
-        }
-    }
-
-}
-*/
 
 int main() {
-    printf("MAIN\n");
+    head = malloc(sizeof(struct bg_pro));
     int bailout = 0;
     head = NULL;
     while (!bailout) {
         char prompt[1000] = "";
         char *reply = readline(create_prompt(prompt));
-        printf("reply\n");
-        char *argsv[10];
+        char *argsv[100];
         int i = 0;
         char *token = strtok(reply, " ");
         if (token == NULL){
@@ -179,14 +205,13 @@ int main() {
         } else if (!strcmp(argsv[0], "cd")) {
             process_cd(argsv);
         } else if (!strcmp(argsv[0], "bg")) {
-            printf("First argument is bg\n");
             process_bg(argsv);
         } else if (!strcmp(argsv[0], "bglist")) {
             print_bglist();
         } else {
             execute_program(argsv[0], argsv);
         }
-
+            kill_bg_zombies();
             free(reply);
     }
         printf("Quitting...\n");
