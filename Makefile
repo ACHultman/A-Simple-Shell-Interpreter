@@ -1,14 +1,8 @@
 .phony all:
-all: sample inf args
+all: p1
 
-sample: sample.c
-	gcc sample.c -lreadline -lhistory -ltermcap -o sample
-
-inf: inf.c
-	gcc inf.c -o inf
-
-args: args.c
-	gcc args.c -o args
+p1: p1.c
+	gcc p1.c -lreadline -lhistory -ltermcap -o p1
 
 .PHONY clean:
 clean:
