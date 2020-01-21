@@ -1,10 +1,3 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <unistd.h>
-#include <string.h>
-#include <readline/readline.h>
-#include <sys/wait.h>
-
 /*
  * Author: Adam Hultman
  * Student Number: V00900702
@@ -15,6 +8,15 @@
  *          A Simple Shell Interpreter
  */
 
+
+#include <stdio.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <string.h>
+#include <readline/readline.h>
+#include <sys/wait.h>
+
+
 // Structure for a background process node.
 struct bg_pro{
     pid_t pid;
@@ -22,6 +24,7 @@ struct bg_pro{
     struct bg_pro* next;
 };
 struct bg_pro* bg_list_head;
+
 
 /*
  * @Parameters: char array prompt.
